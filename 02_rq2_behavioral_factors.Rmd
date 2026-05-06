@@ -1,0 +1,247 @@
+---
+title: "RQ2: Behavioral Factors Associated with Abnormal Cholesterol"
+author: "Zhan Zhao"
+date: "2026-04-28"
+output:
+  word_document: default
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+# Research Question 
+Behavioral Factors Associated with Abnormal Cholesterol, Among U.S. young adults aged 18–26 years 
+
+# ::: {.hypothesis #label name="hypothesis name"}
+ 
+**Null Hypothesis:** Smoking status, alcohol use, physical activity, and sedentary behavior  
+ are not associated with abnormal cholesterol after adjustment for demographic and body weight characteristics.  
+
+**Alternative Hypothesis:** One or more behavior factors are associatedwith abnormal cholesterol after adjustment  
+ for demographic and body weight characteristics.
+:::
+
+# Initialize
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                        warning = TRUE,
+                        message = TRUE,
+                        fig.width = 8,
+                        fig.height = 6
+                        )
+library(tidyr)
+library(survey)
+library(ggplot2)
+library(srvyr)
+library(dplyr)
+library(haven)
+library(janitor)
+```
+
+
+
+# Define Data Directories
+```{r define-data-directories}
+
+project.dir <- "/Users/zhaozhan/nhanes-abnormal-cholesterol-young-adults"
+data.dir <- file.path(project.dir, "01 Data")
+output.dir <- file.path(project.dir, "02 Output")
+processed.dir <- file.path(data.dir, "processed")
+
+
+nhanes.young <- readRDS(
+    file.path(processed.dir, "nhanes_young_cholesterol.rds")
+)
+
+# Questionaire files for RQ2 behavioral factors
+alq.file <- file.path(data.dir, "ALQ_L.xpt")
+paq.file <- file.path(data.dir, "PAQ_L.xpt")
+slq.file <- file.path(data.dir, "SLQ_L.xpt")
+smq.file <- file.path(data.dir, "SMQ_L.xpt")
+
+alq <- read_xpt(alq.file) %>% clean_names()
+paq <- read_xpt(paq.file) %>% clean_names()
+slq <- read_xpt(slq.file) %>% clean_names()
+smq <- read_xpt(smq.file) %>% clean_names()
+
+# Check variable names
+names(alq)
+names(paq)
+names(slq)
+names(smq)
+
+```
+
+
+
+# Load and Clean Data 
+```{r merge-data}
+# Merge the behavioral data with the main dataset 
+nhanes.q2 <- nhanes.young |>
+    left_join(
+        alq |> select(seqn, alq111, alq121, alq170), 
+        by = "seqn") |>
+    left_join(
+        paq |> select(seqn, pad790q, pad790u, pad800, pad810q, pad810u, pad820, pad680), 
+        by = "seqn") |>
+    left_join(
+        slq |> select(seqn, sld012, sld013),
+        by = "seqn") |>
+    left_join(
+        smq |> select(seqn, smq020, smq040 ),
+         by = "seqn")
+
+```
+
+# Create Analytic Variables and Survey Design
+
+```{r create-analytic-variables}
+nhanes.q2 <- nhanes.q2 |>
+    mutate(
+        # smoking status
+        smoking_status = case_when(
+            smq020 == 2 ~ "Never smoker",
+            smq020 == 1 & smq040 == 3 ~ "Former smoker",
+            smq020 == 1 & smq040 %in% c(1,2) ~ "Current smoker",
+            TRUE ~ NA_character_
+        ),
+        # alcohol use
+        alcohol_12mo = case_when(
+            alq111 == 2 ~ "Never drinker",
+            alq121 == 0 ~ "No alcohol in past 12 months",
+            alq121 %in% 1:10 ~ "Alcohol use in past 12 months",
+            TRUE ~ NA_character_
+        ),
+        
+
+    binge_30d = case_when(
+
+      alq170 == 0 ~ "No binge drinking in past 30 days",
+
+      alq170 >= 1 & alq170 <= 30 ~ "Any binge drinking in past 30 days",
+
+      TRUE ~ NA_character_
+
+    ),
+
+    moderate_freq_week = case_when(
+
+      pad790u == "D" ~ pad790q * 7,
+
+      pad790u == "W" ~ pad790q,
+
+      pad790u == "M" ~ pad790q / 4.345,
+
+      pad790u == "Y" ~ pad790q / 52,
+
+      TRUE ~ NA_real_
+
+    ),
+
+    vigorous_freq_week = case_when(
+
+      pad810u == "D" ~ pad810q * 7,
+
+      pad810u == "W" ~ pad810q,
+
+      pad810u == "M" ~ pad810q / 4.345,
+
+      pad810u == "Y" ~ pad810q / 52,
+
+      TRUE ~ NA_real_
+
+    ),
+
+    moderate_min_week = moderate_freq_week * pad800,
+
+    vigorous_min_week = vigorous_freq_week * pad820,
+
+    total_pa_min_week = rowSums(
+
+      cbind(moderate_min_week, vigorous_min_week),
+
+      na.rm = TRUE
+
+    ),
+
+    pa_category = case_when(
+
+      total_pa_min_week >= 150 ~ "Meets 150 min/week",
+
+      total_pa_min_week < 150 ~ "Below 150 min/week",
+
+      TRUE ~ NA_character_
+
+    ),
+
+    sedentary_cat = case_when(
+
+      pad680 >= 480 & pad680 < 1440 ~ "High sedentary time",
+
+      pad680 < 480 ~ "Lower sedentary time",
+
+      TRUE ~ NA_character_
+
+    ),
+
+    sleep_cat = case_when(
+
+      sld012 < 7 ~ "Short sleep",
+
+      sld012 >= 7 & sld012 <= 9 ~ "Recommended sleep",
+
+      sld012 > 9 ~ "Long sleep",
+
+      TRUE ~ NA_character_
+    )
+
+ )
+
+nhanes.q2.design <- nhanes.q2 |>
+  as_survey_design(
+    ids = sdmvpsu,
+    strata = sdmvstra,
+    weights = wtmec2yr,
+    nest = TRUE
+  )
+
+```
+
+```{r descriptive-table}
+
+# smking status
+q2.desc <- nhanes.q2.design |>
+  group_by(smoking_status) |>
+  summarise(
+    prevalence = survey_mean(flag.any, na.rm = TRUE)
+  )
+
+print(q2.desc)
+q2.alcohol <- nhanes.q2.design |>
+  group_by(binge_30d) |>
+  summarise(
+    prevalence = survey_mean(flag.any, na.rm = TRUE)
+  )
+
+print(q2.alcohol)
+
+
+q2.pa <- nhanes.q2.design |>
+  group_by(pa_category) |>
+  summarise(
+    prevalence = survey_mean(flag.any, na.rm = TRUE)
+  )
+
+print(q2.pa)
+
+q2.sedentary <- nhanes.q2.design |>
+  group_by(sedentary_cat) |>
+  summarise(
+    prevalence = survey_mean(flag.any, na.rm = TRUE)
+  )
+
+print(q2.sedentary)
+```

@@ -168,6 +168,17 @@ nhanes.young <- nhanes.young |>
     )
   )
 
+# keep the dependent variabels in specific file path
+processed.dir <- file.path(data.dir, "processed")
+if (!dir.exists(processed.dir)) {
+  dir.create(processed.dir), recursive = TRUE
+}
+saveRDS(
+  nhanes.young,
+  file = file.path(processed.dir, "nhanes_young_cholesterol.rds")
+)
+
+
 nhanes.design <- nhanes.young |>
   as_survey_design(
     ids = sdmvpsu,
