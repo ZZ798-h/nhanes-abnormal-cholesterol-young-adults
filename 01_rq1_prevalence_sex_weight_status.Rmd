@@ -1,0 +1,379 @@
+---
+title: "RQ1: Abnormal Cholesterol Prevalence by Sex and Weight Status"
+author: "Zhan_Zhao"
+date: "2026-04-28"
+output:
+  word_document: default
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+## Task Description  
+
+# Initialize  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = TRUE,
+                      fig.width = 8,
+                      fig.height = 6)
+
+#library All needed packages
+library(haven)
+library(janitor)
+library(dplyr)
+library(survey)
+library(srvyr)
+library(ggplot2)
+library(tidyr)
+```
+
+# Define Data Directories  
+
+```{r}
+getwd()
+#Set file directories workflow 
+
+project.dir<-"/Users/zhaozhan/nhanes-abnormal-cholesterol-young-adults"
+data.dir<-file.path(project.dir,"01 Data")
+output.dir<-file.path(project.dir,"02 Output")
+
+# check dir if exiting
+# dir.exists(data.dir)
+# dir.exists(output.dir)
+
+#Set data directories workflow 
+# Dependent variables
+hdl.chol.file<-file.path(
+  data.dir,
+  "HDL_L.xpt"
+)
+
+t.chol.file<-file.path(
+  data.dir,
+  "TCHOL_L.xpt"
+)
+
+demo.file<-file.path(
+  data.dir,
+  "DEMO_L.xpt")
+
+bmi.file<-file.path(
+  data.dir,
+  "BMX_L.xpt")
+```
+
+# Load and Clean Data 
+```{r}
+#load hdl.chol
+hdl.chol<-read_xpt(hdl.chol.file)|>
+  clean_names()
+
+#load t.chol
+t.chol<-read_xpt(t.chol.file)|>
+  clean_names()
+
+#clean data
+hdl.chol.c<- hdl.chol|>
+  filter(!is.na(lbdhdd))|>
+  select(
+    seqn,lbdhdd
+  )
+
+t.chol.c<- t.chol|>
+  filter(!is.na(lbxtc))|>
+  select(
+    seqn,lbxtc
+  )
+
+#merge data
+Abnormal_cholesterol<-left_join(t.chol.c,
+          hdl.chol.c,
+          by="seqn")
+
+# fullfill dataset :Non-HDL-C = Total Cholesterol（TCHOL_L）− HDL-C（HDL_L）
+Abnormal_cholesterol<-Abnormal_cholesterol|>
+  mutate(
+    non.hdl.c = lbxtc - lbdhdd
+  )|>
+  rename(high.total.chol = "lbxtc",
+         low.hdl = "lbdhdd",
+         high.non.hdl = "non.hdl.c")
+
+
+
+#BMI Sex ...
+demo<-read_xpt(demo.file)|>
+  clean_names()
+
+bmi<-read_xpt(bmi.file)|>
+  clean_names()
+
+demo.c<-demo|>
+  select(seqn,
+         riagendr,
+         ridageyr,
+         ridreth1,
+         ridreth3,
+         sdmvpsu,
+         wtmec2yr,
+         sdmvstra)|>
+  filter(ridageyr>=18 &ridageyr<=26)
+
+bmi.c<-bmi|>
+  filter(!is.na(bmxbmi))|>
+  select(seqn,bmxbmi)
+
+#merge the Primary Dataset
+nhanes.young<-left_join(demo.c,
+                        Abnormal_cholesterol,
+                        by="seqn")
+
+
+nhanes.young<-left_join(nhanes.young,
+                        bmi.c,
+                        by="seqn")
+
+nhanes.young<-nhanes.young|>
+  filter(!is.na(high.total.chol)|
+           !is.na(low.hdl)|
+           !is.na(high.non.hdl))
+
+
+```
+
+# Create Analytic Variables and Survey Design
+
+```{r create-analytic-variables}
+nhanes.young <- nhanes.young |>
+  mutate(
+    flag.high.tchol = high.total.chol >= 200,
+    flag.low.hdl = low.hdl < 40,
+    flag.high.nonhdl = high.non.hdl >= 145,
+    flag.any = flag.high.tchol | flag.low.hdl | flag.high.nonhdl,
+
+    sex = case_when(
+      riagendr == 1 ~ "Male",
+      riagendr == 2 ~ "Female",
+      TRUE ~ NA_character_
+    ),
+
+    bmi.cat = case_when(
+      bmxbmi < 25.0 ~ "Underweight or normal weight",
+      bmxbmi >= 25.0 & bmxbmi < 30.0 ~ "Overweight",
+      bmxbmi >= 30.0 ~ "Obesity",
+      TRUE ~ NA_character_
+    )
+  )
+
+nhanes.design <- nhanes.young |>
+  as_survey_design(
+    ids = sdmvpsu,
+    strata = sdmvstra,
+    weights = wtmec2yr,
+    nest = TRUE
+  )
+
+pre.overall <- nhanes.design |>
+  summarise(
+    any_abnormal = survey_mean(flag.any, na.rm = TRUE),
+    high_tchol = survey_mean(flag.high.tchol, na.rm = TRUE),
+    low_hdl = survey_mean(flag.low.hdl, na.rm = TRUE),
+    high_nonhdl = survey_mean(flag.high.nonhdl, na.rm = TRUE)
+  )
+
+print(pre.overall)
+```
+
+# Figure 1. Overall Prevalence of Abnormal Cholesterol Measures
+```{r }
+#figure 1: Overall prevalence of abnormal cholesterol measures
+fig1.data <- pre.overall |>
+  select(
+    any_abnormal,
+    any_abnormal_se,
+    low_hdl,
+    low_hdl_se,
+    high_nonhdl,
+    high_nonhdl_se,
+    high_tchol,
+    high_tchol_se
+  ) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "measure",
+    values_to = "value"
+  ) |>
+  mutate(
+    type = ifelse(grepl("_se$", measure), "se", "estimate"),
+    measure = gsub("_se$", "", measure)
+  ) |>
+  pivot_wider(
+    names_from = type,
+    values_from = value
+  ) |>
+  mutate(
+    category = case_when(
+      measure == "any_abnormal" ~ "Any abnormal cholesterol",
+      measure == "low_hdl" ~ "Low HDL cholesterol",
+      measure == "high_nonhdl" ~ "High non-HDL cholesterol",
+      measure == "high_tchol" ~ "High total cholesterol"
+    ),
+    percent = estimate * 100,
+    lower = (estimate - 1.96 * se) * 100,
+    upper = (estimate + 1.96 * se) * 100,
+    category = factor(
+      category,
+      levels = c(
+        "Any abnormal cholesterol",
+        "Low HDL cholesterol",
+        "High non-HDL cholesterol",
+        "High total cholesterol"
+      )
+    )
+  )
+print(fig1.data)
+
+
+fig1 <- ggplot(fig1.data, aes( x = category, y = percent)) +
+  geom_col(fill = "steelblue", width = 0.65) +
+  geom_errorbar(
+    aes(ymin = lower, ymax = upper),
+    width = 0.2
+  ) +
+  geom_text(
+    aes(label = round(percent, 1)),
+    vjust = -0.5,
+    size = 4
+      ) +
+  scale_y_continuous (
+    limits = c(0, max(fig1.data$upper, na.rm = TRUE) + 8),
+      breaks = seq(0, 60, by = 10)
+    ) +
+    labs(
+      title = "Prevalence of Abnormal Cholesterol Measures",
+      x = NULL,
+      y = "Percent"
+    ) +
+    theme_classic() +
+    theme(
+      plot.title = element_text (size = 12, face = "bold"),
+      axis.text.x = element_text(size = 10),
+      axis.text.y = element_text(size =10),
+      axis.title.y = element_text(size = 11)
+      )
+
+fig1
+
+ggsave(
+  filename = file.path(output.dir, "figure1_abnormal_cholesterol_measures.png"),
+  plot = fig1,
+  width = 9,
+  height = 6,
+  dpi = 300
+)
+
+
+
+```
+
+# Figure 2. Prevalence by Sex and Weight Status
+
+```{r }
+#tabele combine sex and bmi
+# Recode sex and BMI categories
+
+prev.sex <- nhanes.design |>
+  filter(!is.na(sex)) |>
+  group_by(sex) |>
+  summarise(
+    prevalence = survey_mean(flag.any,na.rm = TRUE)
+  ) |>
+  mutate(
+    group = "Sex",
+    category = sex
+  ) |>
+  select(group, category, prevalence, prevalence_se)
+
+prev.bmi <- nhanes.design |>
+  filter(!is.na(bmi.cat)) |>
+  group_by(bmi.cat) |>
+  summarise(
+    prevalence = survey_mean(flag.any, na.rm = TRUE)
+  ) |>
+  mutate(
+    group = "Weight status",
+    category = bmi.cat
+  ) |>
+  select(group, category, prevalence, prevalence_se)
+
+fig2.data<- bind_rows(prev.sex, prev.bmi) |>
+  mutate(
+    percent = prevalence * 100,
+    lower = (prevalence - 1.96 * prevalence_se) * 100,
+    upper = (prevalence + 1.96 * prevalence_se) * 100
+  )
+print(fig2.data)
+
+fig2.data <- fig2.data |>
+  mutate(
+    category = factor(
+      category,
+      levels = c(
+        "Female",
+        "Male",
+        "Underweight or normal weight",
+        "Overweight",
+        "Obesity"
+      )
+    )
+  )
+
+fig2 <- ggplot(fig2.data, aes(x = percent, y = category, fill = group))+
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_errorbarh(
+    aes( xmin = lower, xmax = upper),
+    height = 0.18
+  ) +
+  geom_text(
+    aes( label = round (percent, 1)),
+    hjust = -0.25,
+    size = 4
+  ) +
+  scale_x_continuous(
+    limits = c(0, max(fig2.data$upper, na.rm = TRUE) + 8),
+    breaks = seq(0, 80, by = 10)
+  ) +
+  labs(
+    title = "Prevalence of Abnormal Cholesterol by Sex and Weight Status",
+    x = "Percent",
+    y = NULL
+  ) +
+    theme_classic() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold"),
+      axis.text.y = element_text(size = 11),
+      axis.text.x = element_text(size = 10),
+      axis.title.x = element_text(size = 11)
+    )
+
+fig2
+ggsave(
+    filename = file.path(output.dir, "figure2_abnormal_cholesterol_by_sex_bmi.png"),
+    plot = fig2,
+    width = 9,
+    height = 6,
+    dpi = 300
+  )
+  ```
+
+  
+
+
+
+
+
+
+
