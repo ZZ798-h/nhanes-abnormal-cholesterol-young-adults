@@ -3,12 +3,12 @@ title: "RQ1: Abnormal Cholesterol Prevalence by Sex and Weight Status"
 author: "Zhan_Zhao"
 date: "2026-04-28"
 output:
-  word_document: default
   html_document:
     theme: cerulean
     toc: true
     toc_float: true
     code_folding: hide
+  word_document: default
 ---
 ## Task Description  
 
@@ -378,7 +378,8 @@ ggsave(
     height = 6,
     dpi = 300
   )
-  ```
+```
+
 
   
 

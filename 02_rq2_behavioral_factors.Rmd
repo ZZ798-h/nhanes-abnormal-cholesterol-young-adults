@@ -3,12 +3,12 @@ title: "RQ2: Behavioral Factors Associated with Abnormal Cholesterol"
 author: "Zhan Zhao"
 date: "2026-04-28"
 output:
-  word_document: default
   html_document:
     theme: cerulean
     toc: true
     toc_float: true
     code_folding: hide
+  word_document: default
 ---
 
 # Research Question 
@@ -583,4 +583,4 @@ ggplot(diagnostic_data, aes(x = obs_number, y = dffits)) +
     y = "DFFITS"
   ) +
   theme_classic()
-  ```
+```
