@@ -1,0 +1,46 @@
+"model","term","odds_ratio","conf_low","conf_high","p_value"
+"Smoking status","(Intercept)",0.01,0,0.17,0.013
+"Smoking status","smoking_statusFormer smoker",0.8,0.25,2.62,0.635
+"Smoking status","smoking_statusCurrent smoker",1.69,0.32,9.02,0.435
+"Smoking status","ridageyr",1.13,0.98,1.29,0.073
+"Smoking status","sexMale",2,1.12,3.58,0.03
+"Smoking status","factor(ridreth3)2",0.61,0.25,1.51,0.204
+"Smoking status","factor(ridreth3)3",1.93,0.69,5.34,0.149
+"Smoking status","factor(ridreth3)4",1.88,0.68,5.19,0.161
+"Smoking status","factor(ridreth3)6",1.76,0.3,10.28,0.425
+"Smoking status","factor(ridreth3)7",3.54,0.85,14.72,0.07
+"Smoking status","bmi.catOverweight",1.52,0.36,6.43,0.469
+"Smoking status","bmi.catObesity",4.46,2.2,9.06,0.004
+"Binge drinking","(Intercept)",0,0,0.14,0.012
+"Binge drinking","binge_30dAny binge drinking in past 30 days",0.47,0.18,1.24,0.097
+"Binge drinking","ridageyr",1.17,1.02,1.35,0.035
+"Binge drinking","sexMale",2.42,0.98,5.96,0.053
+"Binge drinking","factor(ridreth3)2",0.85,0.1,7.46,0.848
+"Binge drinking","factor(ridreth3)3",1.84,0.3,11.36,0.403
+"Binge drinking","factor(ridreth3)4",2.21,0.14,35.87,0.474
+"Binge drinking","factor(ridreth3)6",4.3,0.48,38.82,0.14
+"Binge drinking","factor(ridreth3)7",7.44,1.44,38.53,0.028
+"Binge drinking","bmi.catOverweight",1.15,0.25,5.34,0.809
+"Binge drinking","bmi.catObesity",2.69,0.76,9.48,0.094
+"Physical activity","(Intercept)",0.01,0,0.25,0.016
+"Physical activity","pa_categoryBelow 150 min/week",1.78,0.97,3.27,0.06
+"Physical activity","ridageyr",1.11,0.97,1.28,0.106
+"Physical activity","sexMale",2.31,1.36,3.92,0.01
+"Physical activity","factor(ridreth3)2",0.73,0.3,1.78,0.406
+"Physical activity","factor(ridreth3)3",2.15,0.71,6.48,0.136
+"Physical activity","factor(ridreth3)4",1.95,0.76,4.97,0.127
+"Physical activity","factor(ridreth3)6",1.65,0.3,9.13,0.486
+"Physical activity","factor(ridreth3)7",3.23,0.89,11.77,0.067
+"Physical activity","bmi.catOverweight",1.44,0.34,6.19,0.546
+"Physical activity","bmi.catObesity",3.86,1.79,8.32,0.006
+"Sedentary behavior","(Intercept)",0.01,0,0.18,0.01
+"Sedentary behavior","sedentary_catHigh sedentary time",1.08,0.58,2.01,0.769
+"Sedentary behavior","ridageyr",1.12,0.98,1.29,0.088
+"Sedentary behavior","sexMale",2.03,1.19,3.46,0.019
+"Sedentary behavior","factor(ridreth3)2",0.53,0.23,1.23,0.109
+"Sedentary behavior","factor(ridreth3)3",2.01,0.8,5.02,0.107
+"Sedentary behavior","factor(ridreth3)4",1.93,0.7,5.31,0.154
+"Sedentary behavior","factor(ridreth3)6",1.71,0.33,8.84,0.442
+"Sedentary behavior","factor(ridreth3)7",3.39,0.99,11.67,0.052
+"Sedentary behavior","bmi.catOverweight",1.5,0.39,5.69,0.473
+"Sedentary behavior","bmi.catObesity",4.56,2.34,8.88,0.002

@@ -14,12 +14,12 @@ output:
 # Research Question 
 Behavioral Factors Associated with Abnormal Cholesterol, Among U.S. young adults aged 18–26 years 
 
-# ::: {.hypothesis #label name="hypothesis name"}
+::: {.hypothesis #label name="hypothesis name"}
  
 **Null Hypothesis:** Smoking status, alcohol use, physical activity, and sedentary behavior  
  are not associated with abnormal cholesterol after adjustment for demographic and body weight characteristics.  
 
-**Alternative Hypothesis:** One or more behavior factors are associatedwith abnormal cholesterol after adjustment  
+**Alternative Hypothesis:** One or more behavior factors are associated with abnormal cholesterol after adjustment  
  for demographic and body weight characteristics.
 :::
 
@@ -39,6 +39,7 @@ library(srvyr)
 library(dplyr)
 library(haven)
 library(janitor)
+library(car)
 ```
 
 
@@ -100,22 +101,40 @@ nhanes.q2 <- nhanes.young |>
 
 ```{r create-analytic-variables}
 nhanes.q2 <- nhanes.q2 |>
-    mutate(
-        # smoking status
-        smoking_status = case_when(
-            smq020 == 2 ~ "Never smoker",
-            smq020 == 1 & smq040 == 3 ~ "Former smoker",
-            smq020 == 1 & smq040 %in% c(1,2) ~ "Current smoker",
-            TRUE ~ NA_character_
-        ),
-        # alcohol use
-        alcohol_12mo = case_when(
-            alq111 == 2 ~ "Never drinker",
-            alq121 == 0 ~ "No alcohol in past 12 months",
-            alq121 %in% 1:10 ~ "Alcohol use in past 12 months",
-            TRUE ~ NA_character_
-        ),
-        
+
+  mutate(
+
+    # Outcome
+
+    flag.any.num = as.numeric(flag.any),
+
+    # Smoking status
+
+    smoking_status = case_when(
+
+      smq020 == 2 ~ "Never smoker",
+
+      smq020 == 1 & smq040 == 3 ~ "Former smoker",
+
+      smq020 == 1 & smq040 %in% c(1, 2) ~ "Current smoker",
+
+      TRUE ~ NA_character_
+
+    ),
+
+    # Alcohol use
+
+    alcohol_12mo = case_when(
+
+      alq111 == 2 ~ "Never drinker",
+
+      alq121 == 0 ~ "No alcohol in past 12 months",
+
+      alq121 %in% 1:10 ~ "Alcohol use in past 12 months",
+
+      TRUE ~ NA_character_
+
+    ),
 
     binge_30d = case_when(
 
@@ -127,15 +146,27 @@ nhanes.q2 <- nhanes.q2 |>
 
     ),
 
+    # Clean physical activity special values
+
+    pad790q_clean = if_else(pad790q %in% c(7777, 9999), NA_real_, as.numeric(pad790q)),
+
+    pad800_clean  = if_else(pad800 %in% c(7777, 9999), NA_real_, as.numeric(pad800)),
+
+    pad810q_clean = if_else(pad810q %in% c(7777, 9999), NA_real_, as.numeric(pad810q)),
+
+    pad820_clean  = if_else(pad820 %in% c(7777, 9999), NA_real_, as.numeric(pad820)),
+
+    pad680_clean  = if_else(pad680 %in% c(7777, 9999), NA_real_, as.numeric(pad680)),
+
     moderate_freq_week = case_when(
 
-      pad790u == "D" ~ pad790q * 7,
+      pad790u == "D" ~ pad790q_clean * 7,
 
-      pad790u == "W" ~ pad790q,
+      pad790u == "W" ~ pad790q_clean,
 
-      pad790u == "M" ~ pad790q / 4.345,
+      pad790u == "M" ~ pad790q_clean / 4.345,
 
-      pad790u == "Y" ~ pad790q / 52,
+      pad790u == "Y" ~ pad790q_clean / 52,
 
       TRUE ~ NA_real_
 
@@ -143,27 +174,27 @@ nhanes.q2 <- nhanes.q2 |>
 
     vigorous_freq_week = case_when(
 
-      pad810u == "D" ~ pad810q * 7,
+      pad810u == "D" ~ pad810q_clean * 7,
 
-      pad810u == "W" ~ pad810q,
+      pad810u == "W" ~ pad810q_clean,
 
-      pad810u == "M" ~ pad810q / 4.345,
+      pad810u == "M" ~ pad810q_clean / 4.345,
 
-      pad810u == "Y" ~ pad810q / 52,
+      pad810u == "Y" ~ pad810q_clean / 52,
 
       TRUE ~ NA_real_
 
     ),
 
-    moderate_min_week = moderate_freq_week * pad800,
+    moderate_min_week = moderate_freq_week * pad800_clean,
 
-    vigorous_min_week = vigorous_freq_week * pad820,
+    vigorous_min_week = vigorous_freq_week * pad820_clean,
 
-    total_pa_min_week = rowSums(
+    total_pa_min_week = case_when(
 
-      cbind(moderate_min_week, vigorous_min_week),
+      is.na(moderate_min_week) & is.na(vigorous_min_week) ~ NA_real_,
 
-      na.rm = TRUE
+      TRUE ~ rowSums(cbind(moderate_min_week, vigorous_min_week), na.rm = TRUE)
 
     ),
 
@@ -179,16 +210,16 @@ nhanes.q2 <- nhanes.q2 |>
 
     sedentary_cat = case_when(
 
-      pad680 >= 480 & pad680 < 1440 ~ "High sedentary time",
+      pad680_clean >= 480 & pad680_clean < 1440 ~ "High sedentary time",
 
-      pad680 < 480 ~ "Lower sedentary time",
+      pad680_clean < 480 ~ "Lower sedentary time",
 
       TRUE ~ NA_character_
 
     ),
 
     sleep_cat = case_when(
-
+        
       sld012 < 7 ~ "Short sleep",
 
       sld012 >= 7 & sld012 <= 9 ~ "Recommended sleep",
@@ -196,9 +227,34 @@ nhanes.q2 <- nhanes.q2 |>
       sld012 > 9 ~ "Long sleep",
 
       TRUE ~ NA_character_
+    ),
+
+    # Set reference categories
+    smoking_status = factor(
+      smoking_status,
+      levels = c("Never smoker", "Former smoker", "Current smoker")
+    ),
+    binge_30d = factor(
+      binge_30d,
+      levels = c("No binge drinking in past 30 days", "Any binge drinking in past 30 days")
+    ),
+    pa_category = factor(
+      pa_category,
+      levels = c("Meets 150 min/week", "Below 150 min/week")
+    ),
+    sedentary_cat = factor(
+      sedentary_cat,
+      levels = c("Lower sedentary time", "High sedentary time")
+    ),
+    sex = factor(sex, levels = c("Female", "Male")),
+    bmi.cat = factor(
+      bmi.cat,
+      levels = c("Underweight or normal weight", "Overweight", "Obesity")
+
     )
 
- )
+  )
+options(survey.lonely.psu = "adjust")
 
 nhanes.q2.design <- nhanes.q2 |>
   as_survey_design(
@@ -212,36 +268,319 @@ nhanes.q2.design <- nhanes.q2 |>
 
 ```{r descriptive-table}
 
-# smking status
+# smoking status
 q2.desc <- nhanes.q2.design |>
   group_by(smoking_status) |>
   summarise(
     prevalence = survey_mean(flag.any, na.rm = TRUE)
+  ) |>
+  mutate(
+    prevalence_percent = sprintf("%.1f", prevalence * 100),
+    se_percent = sprintf("%.1f", prevalence_se * 100)
+  ) |>
+  select(
+    `Smoking status` = smoking_status,
+    `Prevalence (%)` = prevalence_percent,
+    `SE (%)` = se_percent
   )
 
-print(q2.desc)
 q2.alcohol <- nhanes.q2.design |>
   group_by(binge_30d) |>
   summarise(
     prevalence = survey_mean(flag.any, na.rm = TRUE)
+  ) |>
+  mutate(
+    prevalence_percent = sprintf("%.1f", prevalence * 100),
+    se_percent = sprintf("%.1f", prevalence_se * 100)
+  ) |>
+  select(
+    `Binge drinking` = binge_30d,
+    `Prevalence (%)` = prevalence_percent,
+    `SE (%)` = se_percent
   )
-
-print(q2.alcohol)
-
 
 q2.pa <- nhanes.q2.design |>
   group_by(pa_category) |>
   summarise(
     prevalence = survey_mean(flag.any, na.rm = TRUE)
+  ) |>
+  mutate(
+    prevalence_percent = sprintf("%.1f", prevalence * 100),
+    se_percent = sprintf("%.1f", prevalence_se * 100)
+  ) |>
+  select(
+    `Physical activity` = pa_category,
+    `Prevalence (%)` = prevalence_percent,
+    `SE (%)` = se_percent
   )
-
-print(q2.pa)
 
 q2.sedentary <- nhanes.q2.design |>
   group_by(sedentary_cat) |>
   summarise(
     prevalence = survey_mean(flag.any, na.rm = TRUE)
+  ) |>
+  mutate(
+    prevalence_percent = sprintf("%.1f", prevalence * 100),
+    se_percent = sprintf("%.1f", prevalence_se * 100)
+  ) |>
+  select(
+    `Sedentary behavior` = sedentary_cat,
+    `Prevalence (%)` = prevalence_percent,
+    `SE (%)` = se_percent
   )
 
-print(q2.sedentary)
+knitr::kable(q2.desc, caption = "Table 1A. Weighted prevalence of abnormal cholesterol by smoking status.")
+
+knitr::kable(q2.alcohol, caption = "Table 1B. Weighted prevalence of abnormal cholesterol by binge drinking status.")
+
+knitr::kable(q2.pa, caption = "Table 1C. Weighted prevalence of abnormal cholesterol by physical activity status.")
+
+knitr::kable(q2.sedentary, caption = "Table 1D. Weighted prevalence of abnormal cholesterol by sedentary behavior.")
 ```
+
+
+Survey-weighted logistic regression models were used to examine associations between behavioral factors and abnormal cholesterol.  
+The dependent variable was any abnormal cholesterol, defined as high total cholesterol, low HDL-C, or high non-HDL-C.  
+Separate crude and adjusted models were fit for smoking status, binge drinking, physical activity, and sedentary behavior.  
+Adjusted models included age, sex, race/ethnicity, and body weight status as covariates. Odds ratios and 95% confidence intervals were reported.
+
+# Logistic Regression Models
+```{r logistics-regression}
+# Function to extract odds ratios and 95% confidence intervals
+
+extract_or <- function(model) {
+  est <- coef(model)
+  ci <- confint(model)
+  result <- data.frame(
+    term = names(est),
+    odds_ratio = exp(est),
+    conf_low = exp(ci[, 1]),
+    conf_high = exp(ci[, 2]),
+    p_value = summary(model)$coefficients[, 4],
+    row.names = NULL
+  )
+  result
+}
+
+# Crude model 1: smoking status
+model_smoking_crude <- survey::svyglm(
+  flag.any.num ~ smoking_status,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_smoking_crude <- extract_or(model_smoking_crude)
+print(or_smoking_crude)
+
+
+# Crude model 2: binge drinking
+model_binge_crude <- survey::svyglm(
+  flag.any.num ~ binge_30d,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_binge_crude <- extract_or(model_binge_crude)
+print(or_binge_crude)
+
+
+# Crude model 3: physical activity
+model_pa_crude <- survey::svyglm(
+  flag.any.num ~ pa_category,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_pa_crude <- extract_or(model_pa_crude)
+print(or_pa_crude)
+
+
+# Crude model 4: sedentary behavior
+model_sedentary_crude <- survey::svyglm(
+  flag.any.num ~ sedentary_cat,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_sedentary_crude <- extract_or(model_sedentary_crude)
+print(or_sedentary_crude)
+
+# Adjusted model 1: smoking status
+model_smoking_adj <- survey::svyglm(
+  flag.any.num ~ smoking_status + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_smoking_adj <- extract_or(model_smoking_adj)
+print(or_smoking_adj)
+
+
+# Adjusted model 2: binge drinking
+model_binge_adj <- survey::svyglm(
+  flag.any.num ~ binge_30d + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_binge_adj <- extract_or(model_binge_adj)
+print(or_binge_adj)
+
+
+# Adjusted model 3: physical activity
+model_pa_adj <- survey::svyglm(
+  flag.any.num ~ pa_category + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_pa_adj <- extract_or(model_pa_adj)
+print(or_pa_adj)
+
+
+# Adjusted model 4: sedentary behavior
+model_sedentary_adj <- survey::svyglm(
+  flag.any.num ~ sedentary_cat + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  design = nhanes.q2.design,
+  family = quasibinomial()
+)
+
+or_sedentary_adj <- extract_or(model_sedentary_adj)
+print(or_sedentary_adj)
+
+rq2_adjusted_results <- bind_rows(
+  or_smoking_adj |> mutate(model = "Smoking status"),
+  or_binge_adj |> mutate(model = "Binge drinking"),
+  or_pa_adj |> mutate(model = "Physical activity"),
+  or_sedentary_adj |> mutate(model = "Sedentary behavior")
+) |>
+  select(model, term, odds_ratio, conf_low, conf_high, p_value) |>
+  mutate(
+    odds_ratio = round(odds_ratio, 2),
+    conf_low = round(conf_low, 2),
+    conf_high = round(conf_high, 2),
+    p_value = round(p_value, 3)
+  )
+
+rq2_behavioral_results <- rq2_adjusted_results |>
+  filter(
+    term %in% c(
+      "smoking_statusFormer smoker",
+      "smoking_statusCurrent smoker",
+      "binge_30dAny binge drinking in past 30 days",
+      "pa_categoryBelow 150 min/week",
+      "sedentary_catHigh sedentary time"
+    )
+  )
+
+print(rq2_behavioral_results)
+
+write.csv(
+  rq2_behavioral_results,
+  file = file.path(output.dir, "rq2_behavioral_main_results.csv"),
+  row.names = FALSE
+)
+```
+
+```{r rq2-kable-table, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Create a clean academic table for the main RQ2 behavioral results
+rq2_behavioral_results <- rq2_adjusted_results |>
+  filter(
+    term %in% c(
+      "smoking_statusFormer smoker",
+      "smoking_statusCurrent smoker",
+      "binge_30dAny binge drinking in past 30 days",
+      "pa_categoryBelow 150 min/week",
+      "sedentary_catHigh sedentary time"
+    )
+  )
+
+rq2_behavioral_table <- rq2_behavioral_results |>
+  mutate(
+    behavioral_factor = case_when(
+      term == "smoking_statusFormer smoker" ~ 
+        "Former smoker vs. never smoker",
+      term == "smoking_statusCurrent smoker" ~ 
+        "Current smoker vs. never smoker",
+      term == "binge_30dAny binge drinking in past 30 days" ~ 
+        "Any binge drinking vs. none",
+      term == "pa_categoryBelow 150 min/week" ~ 
+        "Below 150 min/week physical activity vs. meets guideline",
+      term == "sedentary_catHigh sedentary time" ~ 
+        "High sedentary time vs. lower sedentary time",
+      TRUE ~ term
+    ),
+    odds_ratio = sprintf("%.2f", odds_ratio),
+    ci_95 = paste0(sprintf("%.2f", conf_low), "–", sprintf("%.2f", conf_high)),
+    p_value = ifelse(p_value < 0.001, "<0.001", sprintf("%.3f", p_value))
+  ) |>
+  select(
+    Model = model,
+    `Behavioral Factor` = behavioral_factor,
+    `Adjusted OR` = odds_ratio,
+    `95% CI` = ci_95,
+    `p-value` = p_value
+  )
+
+knitr::kable(
+  rq2_behavioral_table,
+  caption = "Table 2. Adjusted associations between behavioral factors and abnormal cholesterol among U.S. young adults aged 18–26 years, NHANES August 2021–August 2023.",
+  align = c("l", "l", "c", "c", "c")
+)
+
+
+write.csv(
+  rq2_behavioral_table,
+  file = file.path(output.dir, "table2_rq2_behavioral_adjusted_or.csv"),
+  row.names = FALSE
+)
+
+```
+
+# logistic regression diagnostics
+## Multicollinearity Check
+```{r rq2-vif-check}
+# Multicollinearity check using VIF
+# Use a comparable unweighted glm for VIF screening
+
+model_pa_adj_glm <- glm(
+  flag.any.num ~ pa_category + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  data = nhanes.q2,
+  family = binomial(),
+  na.action = na.exclude
+)
+
+car::vif(model_pa_adj_glm)
+```
+Variance inflation factors were examined using an unweighted logistic regression model with the same covariates as a screening check for multicollinearity.  
+The adjusted GVIF values were close to 1 for all predictors, suggesting no evidence of problematic multicollinearity among the model covariates.  
+
+## Influence Diagnostics
+```{r rq2-influence-check, fig.width=8, fig.height=5}
+# Influence diagnostics using comparable unweighted logistic regression
+
+model_pa_adj_glm <- glm(
+  flag.any.num ~ pa_category + ridageyr + sex + factor(ridreth3) + bmi.cat,
+  data = nhanes.q2,
+  family = binomial(),
+  na.action = na.exclude
+)
+
+diagnostic_data <- data.frame(
+  obs_number = seq_along(dffits(model_pa_adj_glm)),
+  dffits = dffits(model_pa_adj_glm)
+)
+
+cutoff <- 2 * sqrt(length(coef(model_pa_adj_glm)) / nobs(model_pa_adj_glm))
+
+ggplot(diagnostic_data, aes(x = obs_number, y = dffits)) +
+  geom_point() +
+  geom_hline(yintercept = c(-cutoff, cutoff), linetype = "dashed") +
+  labs(
+    title = "DFFITS Diagnostic Plot",
+    x = "Observation Number",
+    y = "DFFITS"
+  ) +
+  theme_classic()
+  ```

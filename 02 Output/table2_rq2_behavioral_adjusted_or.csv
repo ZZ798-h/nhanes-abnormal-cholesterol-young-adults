@@ -1,0 +1,6 @@
+"Model","Behavioral Factor","Adjusted OR","95% CI","p-value"
+"Smoking status","Former smoker vs. never smoker","0.80","0.25–2.62","0.635"
+"Smoking status","Current smoker vs. never smoker","1.69","0.32–9.02","0.435"
+"Binge drinking","Any binge drinking vs. none","0.47","0.18–1.24","0.097"
+"Physical activity","Below 150 min/week physical activity vs. meets guideline","1.78","0.97–3.27","0.060"
+"Sedentary behavior","High sedentary time vs. lower sedentary time","1.08","0.58–2.01","0.769"

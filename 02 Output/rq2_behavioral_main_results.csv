@@ -1,0 +1,6 @@
+"model","term","odds_ratio","conf_low","conf_high","p_value"
+"Smoking status","smoking_statusFormer smoker",0.8,0.25,2.62,0.635
+"Smoking status","smoking_statusCurrent smoker",1.69,0.32,9.02,0.435
+"Binge drinking","binge_30dAny binge drinking in past 30 days",0.47,0.18,1.24,0.097
+"Physical activity","pa_categoryBelow 150 min/week",1.78,0.97,3.27,0.06
+"Sedentary behavior","sedentary_catHigh sedentary time",1.08,0.58,2.01,0.769
